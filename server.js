@@ -2,38 +2,73 @@
 const qs = require('querystring');
 const http = require('http');
 
-const server = (listener) => {
-  return http.createServer(listener);
+const server = (listener = () => {}, options = {}) => {
+  return Object.assign(
+    http.createServer(listener),
+    options
+  );
 };
 
 const actions = () => {
   return {
     response: (request, response) => {
-      let data = '';
-      request.on('data', (d) => {
-        console.log('data: ', d)
-        data += d;
-      });
-      request.on('end', (d) => {
-        let finish = qs.parse(data);
-        if (finish.album) {
+      switch (request.url) {
+        case '/scan':
           let result = {
-            files: []
-          };
-          fs.readdir(__dirname + '/static/mp3/' + finish.album, (error, files) => {
-            if (error) {
-              return console.log(error);
-            }
-            files.forEach(function(file) {
-              console.log(file);
-              result.files.push({
-                'file': file
+              directories: [],
+              files: []
+            };
+            fs.readdir(__dirname + '/static/mp3', (error, files) => {
+              if (error) {
+                return console.log(error);
+              }
+              files.forEach((file) => {
+                result.directories.push(file);
+                toSend = JSON.stringify(result);
               });
-              response.end(JSON.stringify(result));
+              fs.readdir(__dirname + '/static/mp3/' + result.directories[0], (error, files) => {
+                if (error) {
+                  return console.log(error);
+                }
+                files.forEach((file) => {
+                  result.files.push({
+                    'file': file
+                  });
+                });
+                response.end(
+                  JSON.stringify(result)
+                );
+              });
             });
+        break;
+        case '/update':
+          let querystring = '';
+          request.on('data', (data) => {
+            querystring += data;
           });
-        }
-      });
+          request.on('end', (data) => {
+            const query = qs.parse(querystring);
+            if (query.album) {
+              let result = {
+                files: []
+              };
+              fs.readdir(__dirname + '/static/mp3/' + query.album, (error, files) => {
+                if (error) {
+                  return console.log(error);
+                }
+                files.forEach((file) => {
+                  result.files.push({
+                    'file': file
+                  });
+                });
+                response.end(
+                  JSON.stringify(result)
+                );
+              });
+            }
+          });
+        break;
+      }
     },
   }
 };
@@ -45,30 +80,7 @@ const app = server((request, response) => {
     case 'GET':
       switch (request.url) {
         case '/':
-          let result = {
-            dirs: [],
-            files: []
-          };
-          fs.readdir(__dirname + '/static/mp3', (error, files) => {
-            if (error) {
-              return console.log(error);
-            }
-            files.forEach((file) => {
-              result.dirs.push(file);
-              toSend = JSON.stringify(result);
-            });
-            fs.readdir(__dirname + '/static/mp3/' + result.dirs[0], (error, files) => {
-              if (error) {
-                return console.log(error);
-              }
-              files.forEach((file) => {
-                result.files.push({
-                  'file': file
-                });
-                toSend = JSON.stringify(result);
-              });
-            });
-          });
+        case '/index.html':
           fs.readFile('static/index.html', (error, data) => {
             if (error) {
               response.writeHead(404, {
@@ -112,15 +124,34 @@ const app = server((request, response) => {
           response.end();
         });
       }
+      else if (request.url.indexOf('.js') !== -1) {
+        fs.readFile('static' + request.url, (error, data) => {
+          response.writeHead(200, {
+            'Content-Type': 'text/javascript'
+          });
+          response.write(data);
+          response.end();
+        });
+      }
+      else if (request.url.indexOf('.css') !== -1) {
+        fs.readFile('static' + request.url, (error, data) => {
+          response.writeHead(200, {
+            'Content-Type': 'text/css'
+          });
+          response.write(data);
+          response.end();
+        });
+      }
       break;
     case 'POST':
       app.action.response(request, response);
       break;
   }
+}, {
+  action: actions(),
+  port: 3000
 });
 
-app.action = actions();
-app.port = 3000;
 app.listen(app.port);
 
 console.log('Server listening on localhost:' + app.port);
