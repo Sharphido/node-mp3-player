@@ -1,178 +1,126 @@
-﻿
-var fs = require("fs");
-var qs = require("querystring");
-var http = require("http");
-var toSend = "{}";
+﻿const fs = require('fs');
+const qs = require('querystring');
+const http = require('http');
 
-function servResp(req, res) {
-  var allData = "";
-  req.on("data", function(data) {
-    console.log("data: " + data)
-    allData += data;
-  });
-  req.on("end", function(data) {
-    var finish = qs.parse(allData)
-    if (finish.album) {
-      var obj = {};
-      obj.files = [];
-      fs.readdir(__dirname + '/static/mp3/' + finish.album, function(err, files) {
-        if (err) {
-          return console.log(err);
-        }
-        files.forEach(function(file) {
-          console.log(file);
-          obj.files.push({
-            'file': file
-          });
-          toSend = JSON.stringify(obj);
-        });
-      });
-    }
-      //res.end(JSON.stringify(finish));
-    res.end(toSend);
-
-  });
-
-}
-
-function fixURL(url) {
-  url = url.replace(/%20/g, " ");
-  url = url.replace(/%C5%82/g, "ł");
-  url = url.replace(/%C4%85/g, "ą");
-  url = url.replace(/%C5%9B/g, "ś");
-  url = url.replace(/%C5%BC/g, "ż");
-  url = url.replace(/%C4%99/g, "ę");
-  url = url.replace(/%C3%B3/g, "ó");
-  url = url.replace(/%C4%87/g, "ć");
-  url = url.replace(/%C3%A4/g, "ä");
-  return url;
+const server = (listener) => {
+  return http.createServer(listener);
 };
 
-var server = http.createServer(function(req, res) {
-  console.log(req.method); // zauważ ze przesyłane dane będą typu POST
-
-  switch (req.method) {
-    case "GET":
-      req.url = fixURL(req.url);
-      console.log("adres żądania: " + req.url)
-      switch (req.url) {
-        case '/':
-          var obj = {};
-          obj.dirs = [];
-          fs.readdir(__dirname + '/static/mp3', function(err, files) {
-            if (err) {
-              return console.log(err);
+const actions = () => {
+  return {
+    response: (request, response) => {
+      let data = '';
+      request.on('data', (d) => {
+        console.log('data: ', d)
+        data += d;
+      });
+      request.on('end', (d) => {
+        let finish = qs.parse(data);
+        if (finish.album) {
+          let result = {
+            files: []
+          };
+          fs.readdir(__dirname + '/static/mp3/' + finish.album, (error, files) => {
+            if (error) {
+              return console.log(error);
             }
             files.forEach(function(file) {
               console.log(file);
-              obj.dirs.push(file);
-              toSend = JSON.stringify(obj);
-              //tu dodaj foldery do tablicy
+              result.files.push({
+                'file': file
+              });
+              response.end(JSON.stringify(result));
             });
+          });
+        }
+      });
+    },
+  }
+};
 
-            // tu mogę od razu wywołać taka samą
-            // funkcję czytającą pliki z pierwszego katalogu
-            obj.files = [];
-            fs.readdir(__dirname + '/static/mp3/' + obj.dirs[0], function(err, files) {
-              if (err) {
-                return console.log(err);
+const app = server((request, response) => {
+  request.url = decodeURI(request.url);
+  console.log(request.method, request.url);
+  switch (request.method) {
+    case "GET":
+      switch (request.url) {
+        case '/':
+          let result = {
+            dirs: [],
+            files: []
+          };
+          fs.readdir(__dirname + '/static/mp3', (error, files) => {
+            if (error) {
+              return console.log(error);
+            }
+            files.forEach((file) => {
+              result.dirs.push(file);
+              toSend = JSON.stringify(result);
+            });
+            fs.readdir(__dirname + '/static/mp3/' + result.dirs[0], (error, files) => {
+              if (error) {
+                return console.log(error);
               }
-              files.forEach(function(file) {
-                console.log(file);
-                obj.files.push({
+              files.forEach((file) => {
+                result.files.push({
                   'file': file
                 });
-                toSend = JSON.stringify(obj);
+                toSend = JSON.stringify(result);
               });
             });
           });
-          fs.readFile("static/index.html", function(error, data) {
+          fs.readFile("static/index.html", (error, data) => {
             if (error) {
-              res.writeHead(404, {
+              response.writeHead(404, {
                 'Content-Type': 'text/html'
               });
-              res.write("<h1>błąd 404 - nie ma pliku!<h1>");
-              res.end();
+              response.write("<h1>Error 404 - file not found!<h1>");
+              response.end();
             } else {
-              res.writeHead(200, {
+              response.writeHead(200, {
                 'Content-Type': 'text/html'
               });
-              res.write(data);
-              res.end();
+              response.write(data);
+              response.end();
             }
           });
           break;
         default:
-
       }
 
-      if (req.url.indexOf(".mp3") != -1) {
-        var path = "static" + req.url
-        var filestream = fs.createReadStream(path);
-        filestream.on("open", function() {
-          var stats = fs.statSync(path);
-
-          res.writeHead(200, {
+      if (request.url.indexOf(".mp3") !== -1) {
+        let path = "static" + request.url
+        let fileStream = fs.createReadStream(path);
+        fileStream.on("open", () => {
+          let stats = fs.statSync(path);
+          response.writeHead(200, {
             'Content-Type': 'audio/mpeg',
             'Content-Length': stats.size
           });
-          filestream.pipe(res);
+          fileStream.pipe(response);
         });
-        filestream.on('error', function(err) {
-          // filestream.end();
-          console.log(err)
+        fileStream.on('error', (error) => {
+          console.log(error)
         });
-
       }
-      // console.log(req.url.split('.')[0]);
-      if (req.url.split('.')[1] == 'png') {
-        fs.readFile("static" + req.url, function(error, data) {
-          res.writeHead(200, {
+      else if (request.url.indexOf('.png') !== -1) {
+        fs.readFile("static" + request.url, (error, data) => {
+          response.writeHead(200, {
             'Content-Type': 'image/png'
           });
-          res.write(data);
-          res.end();
-        })
-
-        // console.log('foo');
+          response.write(data);
+          response.end();
+        });
       }
-      // tu wykonaj załadowanie statycznej strony z formularzem
       break;
     case "POST":
-      req.url = fixURL(req.url);
-      console.log("adres żądania: " + req.url);
-
-      // tu wykonaj funkcję "servResp", która pobierze dane przesłane
-      // w formularzu i odpowie do przeglądarki
-      // (uwaga - adres żądania się nie zmienia)
-
-      servResp(req, res);
+      app.action.response(request, response);
       break;
-
   }
+});
 
+app.action = actions();
+app.port = 3000;
+app.listen(app.port);
 
-
-})
-
-server.listen(3000);
-console.log("serwer staruje na porcie 3000 - ten komunikat zobaczysz tylko raz")
-
-
-// for (var i = 0; i < directories.length; i++) {
-//   var dirname = directories[i];
-//   fs.readdir(__dirname + "/static/mp3/" + directories[i], function(err, files) {
-//     if (err) {
-//       return console.log(err);
-//     }
-//     files.forEach(function(file) {
-//       console.log(dirname);
-//       obj[dirname].push(file);
-//       //console.log(file);
-//       //tu dodaj foldery do tablicy
-//     });
-//     // if (obj.files.length == 3)
-//     //console.log(obj);
-//       toSend = JSON.stringify(obj);
-//   });
-// }
+console.log('Server listening on localhost:' + app.port);
