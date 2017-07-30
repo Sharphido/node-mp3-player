@@ -42,7 +42,7 @@ const app = server((request, response) => {
   request.url = decodeURI(request.url);
   console.log(request.method, request.url);
   switch (request.method) {
-    case "GET":
+    case 'GET':
       switch (request.url) {
         case '/':
           let result = {
@@ -69,12 +69,12 @@ const app = server((request, response) => {
               });
             });
           });
-          fs.readFile("static/index.html", (error, data) => {
+          fs.readFile('static/index.html', (error, data) => {
             if (error) {
               response.writeHead(404, {
                 'Content-Type': 'text/html'
               });
-              response.write("<h1>Error 404 - file not found!<h1>");
+              response.write('<h1>Error 404 - file not found!<h1>');
               response.end();
             } else {
               response.writeHead(200, {
@@ -88,10 +88,10 @@ const app = server((request, response) => {
         default:
       }
 
-      if (request.url.indexOf(".mp3") !== -1) {
-        let path = "static" + request.url
+      if (request.url.indexOf('.mp3') !== -1) {
+        let path = 'static' + request.url
         let fileStream = fs.createReadStream(path);
-        fileStream.on("open", () => {
+        fileStream.on('open', () => {
           let stats = fs.statSync(path);
           response.writeHead(200, {
             'Content-Type': 'audio/mpeg',
@@ -104,7 +104,7 @@ const app = server((request, response) => {
         });
       }
       else if (request.url.indexOf('.png') !== -1) {
-        fs.readFile("static" + request.url, (error, data) => {
+        fs.readFile('static' + request.url, (error, data) => {
           response.writeHead(200, {
             'Content-Type': 'image/png'
           });
@@ -113,7 +113,7 @@ const app = server((request, response) => {
         });
       }
       break;
-    case "POST":
+    case 'POST':
       app.action.response(request, response);
       break;
   }
